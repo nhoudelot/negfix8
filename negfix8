@@ -16,7 +16,6 @@
 
 # You may wish to fine-tune the default settings:
 COMMENT="Processed with negfix8"
-GAMMA=2.15
 PROF_DIR=$HOME/.cache/negfix8
 MEM="-quiet -limit memory 2048M" # max physical memory used
 ZIP="-compress zip"
@@ -26,6 +25,10 @@ PROF_NAME=""
 SEPARATE=""
 MIRROR=""
 MAGICK_TEMPORARY_PATH="/var/tmp" # ImageMagick's temporary directory
+GAMMAOUT="-gamma 1.2"
+ICC_PATH=/usr/share/color/icc/colord
+ICC_PROFILE=EktaSpacePS5
+#ICC_PROFILE=sRGB
 
 # Uncomment below, if you want 20% saturation boost
 #SATURATION="-modulate 100,120"
@@ -64,13 +67,12 @@ while [ $# -gt 0 ]; do
     case $1 in
 	-m)	MIRROR="-flop"; shift;;
 	-s)	SEPARATE="-channel $2 -separate"; shift; shift;;
-	-cs)	CS="-contrast-stretch 0"; shift;;
+	-cs) CS="-contrast-stretch 0"; shift;;
 	-r)	BINNING=$2; shift; shift;;
-	-g)     GAMMA=$2; shift; shift;;
 	-c)     PROF_NAME="$2"
 		shift; shift;;
 	-u)     MAKE_PROF=0
-                PROF_NAME="$2";
+                PROF_NAME="$2"; 
 		if [ ! -r "$PROF_DIR"/"$PROF_NAME" ]; then
 		    echo "The profile $PROF_DIR/$PROF_NAME does not exist!"
 		    exit 98
@@ -81,7 +83,6 @@ Usage: negfix8 [-m] [-g G] [-cs] [-r {2|3|4}] [-u frame_prof] [-s {R|G|B}] input
        negfix8 [-m] [-g G] [-cs] [-r {2|3|4}] [-u frame_prof] [-s {R|G|B}] input_file [input_file...]
        negfix8 -c frame_prof input_file [input_file...]
 
-where: -g    - set image gamma to specified value (default: $GAMMA)
        -cs   - perform contrast stretch operation
        -r    - perform X-fold image size reduction, with binning*
        -c    - create frame profile from input file or files, then exit
@@ -136,12 +137,12 @@ if [ $MAKE_PROF -eq 1 ]; then
         exit 97
     fi
     PROF=`convert xc: -format "${VALUES[0]} ${VALUES[1]} ${VALUES[2]} \
-    %[fx: ((${VALUES[0]}/${VALUES[3]})^(1/$GAMMA))*QuantumRange*0.95] \
+    %[fx: ((${VALUES[0]}/${VALUES[3]})^(1/1))*QuantumRange*0.95] \
     %[fx: log(${VALUES[4]}/${VALUES[1]})/log(${VALUES[3]}/${VALUES[0]})] \
     %[fx: log(${VALUES[5]}/${VALUES[2]})/log(${VALUES[3]}/${VALUES[0]})]" info:`
     echo "Profile $PROF_NAME: $PROF"
     if [ "$PROF_NAME" != "-" ]; then
-        echo "$PROF $GAMMA" > "$PROF_DIR"/"$PROF_NAME"
+        echo "$PROF 1" > "$PROF_DIR"/"$PROF_NAME"
         EX=$?
         if [ $EX -ne 0 ]; then
             echo "Error saving profile, error $EX"
@@ -176,42 +177,42 @@ for i in "${WORKLIST[@]}"; do
         set -- $PROF
     else 
         set -- `cat "$PROF_DIR"/"$PROF_NAME"`
-        GAMMA=${7:-$GAMMA}
+        GAMMA=${7:-1}
     fi
 
     # Real work is done below
     if [ "$5" = "1" -a "$6" = "1" -o ! -z "$SEPARATE" ]; then
         if [ $HAS_POLY -eq 1 ]; then
-            echo -n "Writing $OUTF (B&W).... "
-            convert $MEM "${F}" $CSPACE $SEPARATE $BINNING_CMD $MIRROR \
-                $SAFE -poly "$1,-1" -gamma $GAMMA -evaluate Subtract $4 \
-                $CS -comment "$COMMENT" $ZIP $SEPARATE "$OUTF"
+            echo -n "Processing using poly and writing  $OUTF (B&W) in $ICC_PROFILE color space.... "
+            convert $MEM "${F}" $NEGATE $CSPACE $SEPARATE $BINNING_CMD $MIRROR \
+                $SAFE -poly "$1,-1" -gamma 1 -evaluate Subtract $4 \
+                $CS -comment "$COMMENT" $ZIP $SEPARATE -gamma 1.2 -profile "$ICC_PATH/$ICC_PROFILE.icc" "$OUTF"
             EX=$?
         else
-            echo -n "Writing $OUTF (B&W)... "
-            convert $MEM "${F}" $CSPACE $SEPARATE $BINNING_CMD $MIRROR \
-                $SAFE -fx "$1/u" -gamma $GAMMA -evaluate Subtract $4 \
-                $CS -comment "$COMMENT" $ZIP $SEPARATE "$OUTF"
+            echo -n "Processing using fx and writing $OUTF (B&W) in $ICC_PROFILE color space... "
+            convert $MEM "${F}" $NEGATE $CSPACE $SEPARATE $BINNING_CMD $MIRROR \
+                $SAFE -fx "$1/u" -gamma 1 -evaluate Subtract $4 \
+                $CS -comment "$COMMENT" $ZIP $SEPARATE $GAMMAOUT -profile "$ICC_PATH/$ICC_PROFILE.icc" "$OUTF"
             EX=$?
         fi
     else
         if [ $HAS_POLY -eq 1 ]; then
-            echo -n "Writing $OUTF.... "
             convert $MEM "${F}" $CSPACE $BINNING_CMD $MIRROR $SAFE -separate -delete 3-5 \
+            echo -n "Processing using poly and writing $OUTF in $ICC_PROFILE color space.... "
                 \( -clone 0 -poly "$1,-1" \) -swap 0,3 -delete 3 \
                 \( -clone 1 -poly "$2,-1" -gamma $5 \) -swap 1,3 -delete 3 \
                 \( -clone 2 -poly "$3,-1" -gamma $6 \) -swap 2,3 -delete 3 \
-                -combine -type TrueColor +channel -gamma $GAMMA \
-                -evaluate Subtract $4 $CS $SATURATION -comment "$COMMENT" $ZIP "$OUTF"
+                -combine -type TrueColor +channel -gamma 1 \
+		-evaluate Subtract $4 $CS $SATURATION -comment "$COMMENT" $ZIP $GAMMAOUT -profile "$ICC_PATH/$ICC_PROFILE.icc" "$OUTF"
             EX=$?
         else
-            echo -n "Writing $OUTF... "
             convert $MEM "${F}" $CSPACE $BINNING_CMD $MIRROR $SAFE \
+            echo -n "Processing using fx and writing $OUTF in $ICC_PROFILE color space... "
                 -channel R -fx "$1/u" \
                 -channel G -fx "$2/u" -gamma $5 \
                 -channel B -fx "$3/u" -gamma $6 \
-                +channel -gamma $GAMMA -evaluate Subtract $4 \
-                $CS $SATURATION -comment "$COMMENT" $ZIP "$OUTF"
+                +channel -gamma 1 -evaluate Subtract $4 \
+                $CS $SATURATION -comment "$COMMENT" $ZIP $GAMMAOUT -profile "$ICC_PATH/$ICC_PROFILE.icc" "$OUTF"
             EX=$?
         fi
     fi 
