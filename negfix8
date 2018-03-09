@@ -62,6 +62,8 @@ fi
 CSPACE="-set colorspace RGB"
 MAKE_PROF=1
 PROF_NAME="-"
+BLUR="-blur 3x3"
+PICTYPE="negative"
 
 while [ $# -gt 0 ]; do
     case $1 in
@@ -69,6 +71,7 @@ while [ $# -gt 0 ]; do
 	-s)	SEPARATE="-channel $2 -separate"; shift; shift;;
 	-cs) CS="-contrast-stretch 0"; shift;;
 	-r)	BINNING=$2; shift; shift;;
+	-d)	NEGATE="-negate" BLUR="-blur 96x96" PICTYPE="positive";shift;;
 	-c)     PROF_NAME="$2"
 		shift; shift;;
 	-u)     MAKE_PROF=0
@@ -86,6 +89,7 @@ Usage: negfix8 [-m] [-g G] [-cs] [-r {2|3|4}] [-u frame_prof] [-s {R|G|B}] input
 where: -cs   - perform contrast stretch operation
        -r    - perform X-fold image size reduction, with binning*
        -c    - create frame profile from input file or files, then exit
+       -d    - slide mode (image is a positive)
        -u    - use created frame profile
        -s    - separate given channel to make B&W image
        -m    - mirror image horizontally
@@ -123,9 +127,9 @@ if [ $MAKE_PROF -eq 1 ]; then
             echo "Cannot open: $i"
 	    exit 95
         fi
-	echo "Reading "`basename "$i"`
-	VALUES=(`convert $MEM "${i}[0]" +profile "icc,icm" $CSPACE \
-        -shave 10x10 -blur 3x3 -format "%[fx: min(minima.r?minima.r:${VALUES[0]},${VALUES[0]})] \
+	echo "Reading a $PICTYPE: "`basename "$i"`
+	VALUES=(`convert $MEM "${i}[0]" $NEGATE +profile "icc,icm" $CSPACE \
+        -shave 10x10 $BLUR   -format "%[fx: min(minima.r?minima.r:${VALUES[0]},${VALUES[0]})] \
 	%[fx: min(minima.g?minima.g:${VALUES[1]},${VALUES[1]})] \
 	%[fx: min(minima.b?minima.b:${VALUES[2]},${VALUES[2]})] \
 	%[fx: max(maxima.r<1?maxima.r:${VALUES[3]},${VALUES[3]})] \
@@ -180,7 +184,7 @@ for i in "${WORKLIST[@]}"; do
     convert $MEM "$i[0]" +profile "icc,icm" "$F" 2> /dev/null || { echo "Not enough disk space."; exit 98; }
 
     if [ ! -z $BINNING ]; then
-        set -- `convert $MEM "$F" -format "%[fx: $BINNING*floor(w/$BINNING)] %[fx: $BINNING*floor(h/$BINNING)] %[fx: floor(w/$BINNING)] %[fx: floor(h/$BINNING)]" info:`
+        set -- `convert $MEM "$F" $NEGATE -format "%[fx: $BINNING*floor(w/$BINNING)] %[fx: $BINNING*floor(h/$BINNING)] %[fx: floor(w/$BINNING)] %[fx: floor(h/$BINNING)]" info:`
         BINNING_CMD="-crop ${1}x${2}+0+0 +repage -scale ${3}x${4}"
     fi
 
@@ -209,8 +213,8 @@ for i in "${WORKLIST[@]}"; do
         fi
     else
         if [ $HAS_POLY -eq 1 ]; then
-            convert $MEM "${F}" $CSPACE $BINNING_CMD $MIRROR $SAFE -separate -delete 3-5 \
             echo -n "Processing using poly and writing $OUTF in $ICC_PROFILE color space.... "
+            convert $MEM "${F}" $NEGATE $CSPACE $BINNING_CMD $MIRROR $SAFE -separate -delete 3-5 \
                 \( -clone 0 -poly "$1,-1" \) -swap 0,3 -delete 3 \
                 \( -clone 1 -poly "$2,-1" -gamma $5 \) -swap 1,3 -delete 3 \
                 \( -clone 2 -poly "$3,-1" -gamma $6 \) -swap 2,3 -delete 3 \
@@ -218,8 +222,8 @@ for i in "${WORKLIST[@]}"; do
 		-evaluate Subtract $4 $CS $SATURATION -comment "$COMMENT" $ZIP $GAMMAOUT -profile "$ICC_PATH/$ICC_PROFILE.icc" "$OUTF"
             EX=$?
         else
-            convert $MEM "${F}" $CSPACE $BINNING_CMD $MIRROR $SAFE \
             echo -n "Processing using fx and writing $OUTF in $ICC_PROFILE color space... "
+            convert $MEM "${F}" $NEGATE $CSPACE $BINNING_CMD $MIRROR $SAFE \
                 -channel R -fx "$1/u" \
                 -channel G -fx "$2/u" -gamma $5 \
                 -channel B -fx "$3/u" -gamma $6 \
