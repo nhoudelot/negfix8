@@ -17,7 +17,7 @@
 # You may wish to fine-tune the default settings:
 COMMENT="Processed with negfix8"
 GAMMA=2.15
-PROF_DIR=$HOME/.negfix8
+PROF_DIR=$HOME/.cache/negfix8
 MEM="-quiet -limit memory 2048M" # max physical memory used
 ZIP="-compress zip"
 CS=""
