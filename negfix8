@@ -83,7 +83,7 @@ Usage: negfix8 [-m] [-g G] [-cs] [-r {2|3|4}] [-u frame_prof] [-s {R|G|B}] input
        negfix8 [-m] [-g G] [-cs] [-r {2|3|4}] [-u frame_prof] [-s {R|G|B}] input_file [input_file...]
        negfix8 -c frame_prof input_file [input_file...]
 
-       -cs   - perform contrast stretch operation
+where: -cs   - perform contrast stretch operation
        -r    - perform X-fold image size reduction, with binning*
        -c    - create frame profile from input file or files, then exit
        -u    - use created frame profile
@@ -132,10 +132,22 @@ if [ $MAKE_PROF -eq 1 ]; then
 	%[fx: max(maxima.g<1?maxima.g:${VALUES[4]},${VALUES[4]})] \
 	%[fx: max(maxima.b<1?maxima.b:${VALUES[5]},${VALUES[5]})]" info:`)
     done
-    if [ "${VALUES[3]}" == "0" ]; then
-        echo "Cannot create the average frame profile"
-        exit 97
-    fi
+    #if [ "${VALUES[3]}" == "0" ]; then
+    #    echo "Cannot create the average frame profile"
+    #    exit 97
+    #fi   
+	if [ "${VALUES[3]}" == "0" ]; then
+		VALUES[3]=0.000001
+		echo "Warning : maxima.r = 0, using 1 instead"
+	fi
+	if [ "${VALUES[4]}" == "0" ]; then
+		VALUES[4]=1
+		echo "Warning : maxima.g = 0, using 1 instead"
+	fi
+	if [ "${VALUES[5]}" == "0" ]; then
+		VALUES[5]=1
+		echo "Warning : maxima.b = 0, using 1 instead"
+	fi
     PROF=`convert xc: -format "${VALUES[0]} ${VALUES[1]} ${VALUES[2]} \
     %[fx: ((${VALUES[0]}/${VALUES[3]})^(1/1))*QuantumRange*0.95] \
     %[fx: log(${VALUES[4]}/${VALUES[1]})/log(${VALUES[3]}/${VALUES[0]})] \
